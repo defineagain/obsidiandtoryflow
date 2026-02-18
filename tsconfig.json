@@ -20,5 +20,11 @@
   },
   "include": [
     "**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "obsidian-enhanced-canvas/**",
+    "obsidian-image-metadata-plugin/**",
+    "obsidian-html-migration/**"
   ]
 }

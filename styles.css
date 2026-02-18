@@ -1,8 +1,474 @@
-/*
+/* ═══════════════════════════════════════
+   Storyflow Editor - Obsidian Plugin Styles
+   All classes scoped with .storyflow- prefix
+   ═══════════════════════════════════════ */
 
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
+.storyflow-container {
+  font-family: var(--font-interface);
+  padding: 15px 20px;
+  padding-bottom: 20px;
+}
 
-If your plugin does not need CSS, delete this file.
+.storyflow-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.storyflow-header h1 {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-normal);
+  margin: 0;
+}
 
-*/
+/* ── Sections ── */
+.storyflow-section {
+  margin-bottom: 20px;
+}
+
+/* ── Tabs ── */
+.storyflow-tab-container {
+  margin-bottom: 20px;
+}
+.storyflow-tab-nav {
+  display: flex;
+  gap: 4px;
+  margin-left: 10px;
+  margin-bottom: -1px;
+}
+.storyflow-tab-button {
+  padding: 8px 16px;
+  cursor: pointer;
+  border: 1px solid var(--background-modifier-border);
+  border-bottom: none;
+  background-color: var(--background-secondary);
+  border-radius: 6px 6px 0 0;
+  font-weight: 500;
+  color: var(--text-normal);
+  font-size: var(--font-ui-small);
+}
+.storyflow-tab-button:hover {
+  background-color: var(--background-modifier-hover);
+}
+.storyflow-tab-button.active {
+  background-color: var(--background-primary);
+  border-bottom: 1px solid var(--background-primary);
+  font-weight: 600;
+  position: relative;
+}
+.storyflow-tab-content {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-primary);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+.storyflow-tab-panel {
+  display: none;
+}
+.storyflow-tab-panel.active {
+  display: block;
+}
+.storyflow-list-container {
+  padding: 10px;
+  overflow-y: auto;
+  max-height: 300px;
+}
+.storyflow-footer {
+  padding: 10px;
+  border-top: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+}
+.storyflow-io-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--background-modifier-border-hover);
+}
+
+/* ── Shortcut rows (triggers, configs, wildcards, poses) ── */
+.storyflow-trigger,
+.storyflow-config-shortcut,
+.storyflow-wildcard-shortcut,
+.storyflow-poseJSON-shortcut {
+  display: flex;
+  align-items: center;
+  margin: 6px 0;
+  gap: 8px;
+}
+.storyflow-trigger input,
+.storyflow-config-shortcut input,
+.storyflow-wildcard-shortcut input,
+.storyflow-poseJSON-shortcut input {
+  flex: 1;
+}
+.storyflow-trigger textarea,
+.storyflow-config-shortcut textarea,
+.storyflow-wildcard-shortcut textarea,
+.storyflow-poseJSON-shortcut textarea {
+  flex: 3;
+  min-height: 48px;
+  resize: vertical;
+}
+
+/* ── Prompt list & items ── */
+.storyflow-prompt-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 15px;
+}
+.storyflow-item {
+  display: flex;
+  align-items: center;
+  margin: 2px 0;
+  padding: 6px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+}
+.storyflow-item input[type="text"],
+.storyflow-item textarea {
+  margin-right: 8px;
+  flex: 1;
+}
+.storyflow-item textarea {
+  min-height: 48px;
+  resize: vertical;
+}
+
+/* Item type backgrounds */
+.storyflow-item[data-type="note"] {
+  background: #faf6dc;
+}
+.storyflow-item[data-type="prompt"] {
+  background: #fae2e9;
+}
+.storyflow-item[data-type="config"] {
+  background: #d8f0e0;
+}
+.storyflow-item[data-type="frames"] {
+  background: #cddef0;
+}
+.storyflow-item[data-type^="moodboard"] {
+  background: #eee2fa;
+}
+.storyflow-item[data-type^="depth"] {
+  background: #d1d1d9;
+}
+.storyflow-item[data-type="xlMagic"] {
+  color: #ffe739;
+  background: #5a8fba;
+  border-color: #ffe03a;
+}
+.storyflow-item[data-type^="loop"] {
+  background: #f2d7cd;
+}
+
+/* Dark theme overrides */
+.theme-dark .storyflow-item[data-type="note"] {
+  background: #3d3920;
+}
+.theme-dark .storyflow-item[data-type="prompt"] {
+  background: #3d2530;
+}
+.theme-dark .storyflow-item[data-type="config"] {
+  background: #1e3525;
+}
+.theme-dark .storyflow-item[data-type="frames"] {
+  background: #1e2a3d;
+}
+.theme-dark .storyflow-item[data-type^="moodboard"] {
+  background: #2a1e3d;
+}
+.theme-dark .storyflow-item[data-type^="depth"] {
+  background: #2a2a30;
+}
+.theme-dark .storyflow-item[data-type="xlMagic"] {
+  background: #2a4a6a;
+}
+.theme-dark .storyflow-item[data-type^="loop"] {
+  background: #3d2920;
+}
+
+/* ── Drag ── */
+.storyflow-drag-handle {
+  cursor: grab;
+  padding: 4px 8px;
+  margin-right: 8px;
+  background: var(--background-modifier-hover);
+  border-radius: 4px;
+  user-select: none;
+}
+.storyflow-drag-handle:active {
+  cursor: grabbing;
+  background: var(--background-modifier-active-hover);
+}
+.storyflow-item.dragging {
+  opacity: 0.5;
+}
+.storyflow-drop-indicator {
+  height: 6px;
+  background: var(--interactive-accent);
+  margin: 2px 0;
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+/* ── Item labels & index ── */
+.storyflow-item-type-label {
+  font-weight: 600;
+  margin-right: 8px;
+  min-width: 90px;
+  text-transform: capitalize;
+}
+.storyflow-item-index {
+  font-weight: 600;
+  color: var(--text-muted);
+  width: 24px;
+  text-align: right;
+  margin-right: 8px;
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+/* ── Small muted text ── */
+.storyflow-small-muted {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-left: 8px;
+}
+
+/* ── Buttons ── */
+.storyflow-controls-row {
+  margin-bottom: 15px;
+}
+.storyflow-add-buttons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  column-gap: 6px;
+  row-gap: 4px;
+}
+.storyflow-force-break {
+  flex-basis: 100%;
+  height: 0;
+}
+
+.storyflow-btn {
+  border-radius: 5px;
+  background-color: var(--background-modifier-hover);
+  cursor: pointer;
+  border: 1px solid var(--background-modifier-border);
+  padding: 2px 5px;
+  font-size: var(--font-ui-smaller);
+}
+.storyflow-btn:hover {
+  background-color: var(--background-modifier-active-hover);
+}
+
+.storyflow-btn-note {
+  background: #faf6dc;
+  color: #212529;
+  padding: 2px 5px;
+  border-radius: 5px;
+  border: 1px solid var(--background-modifier-border);
+  cursor: pointer;
+  font-size: var(--font-ui-smaller);
+}
+.storyflow-btn-note:hover {
+  background: #f9edb0;
+}
+.storyflow-btn-prompt {
+  background: #fae2e9;
+  color: #212529;
+  padding: 2px 5px;
+  border-radius: 5px;
+  border: 1px solid var(--background-modifier-border);
+  cursor: pointer;
+  font-size: var(--font-ui-smaller);
+}
+.storyflow-btn-prompt:hover {
+  background: #fac2c2;
+}
+.storyflow-btn-config {
+  background: #d8f0e0;
+  color: #212529;
+  padding: 2px 5px;
+  border-radius: 5px;
+  border: 1px solid var(--background-modifier-border);
+  cursor: pointer;
+  font-size: var(--font-ui-smaller);
+}
+.storyflow-btn-config:hover {
+  background: #b2f8c7;
+}
+.storyflow-btn-frames {
+  background: #cddef0;
+  color: #212529;
+  padding: 2px 5px;
+  border-radius: 5px;
+  border: 1px solid var(--background-modifier-border);
+  cursor: pointer;
+  font-size: var(--font-ui-smaller);
+}
+.storyflow-btn-frames:hover {
+  background: #91c0ff;
+}
+.storyflow-btn-special {
+  background: var(--background-modifier-hover);
+  padding: 2px 5px;
+  border-radius: 5px;
+  border: 1px solid #0000cc;
+  cursor: pointer;
+  font-size: var(--font-ui-smaller);
+}
+.storyflow-btn-special:hover {
+  background: #cad6e6;
+}
+.storyflow-btn-canvas {
+  background: var(--background-modifier-hover);
+  padding: 0px 5px;
+  border-radius: 5px;
+  border: 1px solid var(--background-modifier-border);
+  cursor: pointer;
+  font-size: var(--font-ui-smaller);
+}
+.storyflow-btn-canvas:hover {
+  background: var(--background-modifier-active-hover);
+}
+.storyflow-btn-moodboard {
+  background: #eee2fa;
+  color: #212529;
+  padding: 2px 5px;
+  border-radius: 5px;
+  border: 1px solid var(--background-modifier-border);
+  cursor: pointer;
+  font-size: var(--font-ui-smaller);
+}
+.storyflow-btn-moodboard:hover {
+  background: #e7d2f7;
+}
+.storyflow-btn-mask {
+  background: var(--background-modifier-hover);
+  padding: 0px 5px;
+  border-radius: 5px;
+  border: 1px solid var(--background-modifier-border);
+  cursor: pointer;
+  font-size: var(--font-ui-smaller);
+}
+.storyflow-btn-mask:hover {
+  background: var(--background-modifier-active-hover);
+}
+.storyflow-btn-depth {
+  background: #d1d1d9;
+  color: #212529;
+  padding: 2px 5px;
+  border-radius: 5px;
+  border: 1px solid var(--background-modifier-border);
+  cursor: pointer;
+  font-size: var(--font-ui-smaller);
+}
+.storyflow-btn-depth:hover {
+  background: #bdbdcf;
+}
+.storyflow-btn-loop {
+  background: #f2d7cd;
+  color: #212529;
+  padding: 2px 5px;
+  border-radius: 5px;
+  border: 1px solid var(--background-modifier-border);
+  cursor: pointer;
+  font-size: var(--font-ui-smaller);
+}
+.storyflow-btn-loop:hover {
+  background: #f5ccb0;
+}
+.storyflow-btn-xlMagic {
+  background: #5a8fba;
+  color: #ffe739;
+  border-radius: 5px;
+  border: 1px solid #d4a754;
+  padding: 0px 5px;
+  cursor: pointer;
+  font-size: var(--font-ui-smaller);
+}
+.storyflow-btn-xlMagic:hover {
+  background: #3d80d9;
+  color: #e9d862;
+  border-color: #ffe03a;
+}
+
+/* ── Project buttons ── */
+.storyflow-btn-project {
+  background: var(--background-modifier-hover);
+  border-radius: 5px;
+  border: 1px solid var(--background-modifier-border);
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: var(--font-ui-smaller);
+}
+.storyflow-btn-project:hover {
+  background: var(--background-modifier-active-hover);
+}
+.storyflow-btn-dark {
+  background: #2a3b4c;
+  color: #fff;
+  border: 1px solid #3e566d;
+  border-radius: 5px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: var(--font-ui-smaller);
+}
+.storyflow-btn-dark:hover {
+  background: #3e566d;
+}
+
+.storyflow-button-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+/* ── Slider ── */
+.storyflow-slider-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+}
+.storyflow-value-badge {
+  min-width: 34px;
+  text-align: center;
+  font-weight: 700;
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+}
+
+/* ── Preview ── */
+.storyflow-preview-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.storyflow-preview {
+  white-space: pre-wrap;
+  border: 1px solid var(--background-modifier-border);
+  padding: 10px;
+  background: var(--background-secondary);
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: var(--font-monospace);
+}
+
+/* ── File link ── */
+.storyflow-file-link {
+  cursor: pointer;
+  text-decoration: underline;
+  color: var(--text-accent);
+  margin-left: 5px;
+}

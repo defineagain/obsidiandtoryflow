@@ -1,10 +1,9 @@
 {
-  "id": "obsidian-plugin-sandbox",
-  "name": "Plugin Testing Sandbox",
+  "id": "storyflow-editor",
+  "name": "Storyflow editor",
   "version": "1.0.0",
   "minAppVersion": "1.1.0",
-  "description": "Sandbox for reproducing bugs and edge cases",
-  "author": "Obsidian",
-  "authorUrl": "https://github.com/timhor",
-  "isDesktopOnly": true
+  "description": "DrawThings pipeline editor for building Storyflow instruction sequences",
+  "author": "Daniel",
+  "isDesktopOnly": false
 }
