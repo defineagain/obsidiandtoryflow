@@ -278,6 +278,30 @@ export class StoryflowView extends ItemView {
       if (this.draggedEl) { this.draggedEl.removeClass('dragging'); this.draggedEl = null; }
       this.removeDropIndicator();
     });
+    // Touch drag support (mobile/iPad)
+    let touchStartY = 0;
+    dragHandle.addEventListener('touchstart', (e: TouchEvent) => {
+      this.draggedEl = container;
+      container.addClass('dragging');
+      this.promptListEl.addClass('dragging-active');
+      touchStartY = e.touches[0].clientY;
+    }, { passive: true });
+    dragHandle.addEventListener('touchmove', (e: TouchEvent) => {
+      e.preventDefault();
+      const y = e.touches[0].clientY;
+      const after = this.getDragAfterElement(this.promptListEl, y);
+      if (after == null) this.promptListEl.appendChild(this.dropIndicator);
+      else this.promptListEl.insertBefore(this.dropIndicator, after);
+    });
+    dragHandle.addEventListener('touchend', () => {
+      if (this.draggedEl && this.dropIndicator.parentNode) {
+        this.dropIndicator.parentNode.insertBefore(this.draggedEl, this.dropIndicator);
+      }
+      this.removeDropIndicator();
+      this.promptListEl.removeClass('dragging-active');
+      if (this.draggedEl) { this.draggedEl.removeClass('dragging'); this.draggedEl = null; }
+      this.updatePreview();
+    });
 
     // Index
     const indexSpan = container.createEl('span', { cls: 'storyflow-item-index' });
@@ -380,6 +404,8 @@ export class StoryflowView extends ItemView {
         depthExtract: 'Extract a depthMap from Canvas to the depth layer',
         depthCanvas: 'Move a depthMap, does not extract', depthToCanvas: 'Move a depthMap, does not extract',
         loopEnd: 'Close the loop',
+        moodboardLoad: 'Copy the visible Canvas to Moodboard',
+        poseClear: 'Clear the current pose',
       };
       const desc = descriptions[type] || '';
       const el = container.createDiv({ text: desc, cls: 'storyflow-small-muted' });
@@ -399,8 +425,17 @@ export class StoryflowView extends ItemView {
       if (gi > 0) addButtons.createDiv({ cls: 'storyflow-force-break' });
       group.forEach(type => {
         const cls = BUTTON_STYLES[type] || 'storyflow-btn';
-        const btn = addButtons.createEl('button', { text: BUTTON_LABELS[type] || `+ ${type}`, cls });
+        const btn = addButtons.createEl('button', { text: BUTTON_LABELS[type] || `+ ${type}`, cls, attr: { draggable: 'true' } });
         btn.addEventListener('click', () => this.addItem(type));
+        btn.addEventListener('dragstart', (e: DragEvent) => {
+          e.dataTransfer?.setData('text/plain', `NEW_ITEM:${type}`);
+          if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy';
+          this.promptListEl.addClass('dragging-active');
+        });
+        btn.addEventListener('dragend', () => {
+          this.promptListEl.removeClass('dragging-active');
+          this.removeDropIndicator();
+        });
       });
     });
   }
@@ -462,6 +497,22 @@ export class StoryflowView extends ItemView {
     });
     list.addEventListener('drop', (e: DragEvent) => {
       e.preventDefault();
+      const transferData = e.dataTransfer?.getData('text/plain') || '';
+      // New-item drag from instruction bar
+      if (transferData.startsWith('NEW_ITEM:')) {
+        const type = transferData.substring(9) as StoryflowItemType;
+        const newEl = this.createItemElement({ type, value: DEFAULT_ITEM_VALUES[type] ?? '' });
+        if (this.dropIndicator.parentNode) {
+          this.dropIndicator.parentNode.insertBefore(newEl, this.dropIndicator);
+        } else {
+          list.appendChild(newEl);
+        }
+        this.removeDropIndicator();
+        list.removeClass('dragging-active');
+        this.updatePreview();
+        return;
+      }
+      // Reorder drag
       if (!this.draggedEl) return;
       if (this.dropIndicator.parentNode) {
         this.dropIndicator.parentNode.insertBefore(this.draggedEl, this.dropIndicator);
@@ -566,6 +617,21 @@ export class StoryflowView extends ItemView {
         output += `[${idx + 1}] ${it.type}: ${JSON.stringify(it.value)}\n\n`;
       } else if (['moveScale','adaptSize','xlMagic','loop','moodboardRemove','moodboardWeights','maskBody','inpaintTools'].includes(it.type)) {
         output += `[${idx + 1}] ${it.type}: ${it.value}\n\n`;
+      } else if (it.type === 'fileLoad') {
+        const itemEls = this.promptListEl.querySelectorAll('.storyflow-item');
+        const itemEl = itemEls[idx] as HTMLElement | undefined;
+        const fileContent = itemEl?.dataset.fileContent || '';
+        const filePath = itemEl?.dataset.value || '';
+        if (fileContent) {
+          output += `[${idx + 1}] ${it.type}: ${filePath}\n`;
+          output += `  --- INCLUDED CONTENT START ---\n`;
+          output += `  ${fileContent.replace(/\n/g, '\n  ')}\n`;
+          output += `  --- INCLUDED CONTENT END ---\n\n`;
+        } else if (filePath) {
+          output += `[${idx + 1}] ${it.type}: ${filePath} ⚠️ (content not loaded, re-select file)\n\n`;
+        } else {
+          output += `[${idx + 1}] ${it.type}: ⚠️ No file selected\n\n`;
+        }
       } else {
         output += `[${idx + 1}] ${it.type}\n\n`;
       }
@@ -638,9 +704,20 @@ export class StoryflowView extends ItemView {
 
   private getPipelineOutput(): string {
     this.saveAllShortcuts();
+    const items = this.readItemsFromDOM();
+    // Collect fileLoad content from DOM for inline expansion
+    const fileContents: Record<number, string> = {};
+    const itemEls = this.promptListEl.querySelectorAll('.storyflow-item');
+    items.forEach((it, idx) => {
+      if (it.type === 'fileLoad') {
+        const el = itemEls[idx] as HTMLElement | undefined;
+        const content = el?.dataset.fileContent || '';
+        if (content) fileContents[idx] = content;
+      }
+    });
     return generateInstructionString(
-      this.readItemsFromDOM(), this.promptTriggers, this.configShortcuts,
-      this.poseJSONShortcuts, this.wildcardShortcuts
+      items, this.promptTriggers, this.configShortcuts,
+      this.poseJSONShortcuts, this.wildcardShortcuts, fileContents
     );
   }
 

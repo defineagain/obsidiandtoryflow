@@ -81,10 +81,11 @@ export function generateInstructionString(
   configSC: Record<string, string>,
   poseSC: Record<string, string>,
   wildcardSC: Record<string, string>,
+  fileContents?: Record<number, string>,
 ): string {
   const instructionArray: string[] = [];
 
-  items.forEach((it) => {
+  items.forEach((it, idx) => {
     let s = '';
     if (it.type === 'note') {
       s = `{"${it.type}": ${JSON.stringify(it.value)}}`;
@@ -102,6 +103,26 @@ export function generateInstructionString(
       s = `{"${it.type}": ${it.value}}`;
     } else if (['canvasSave','canvasLoad','pipeline','loopLoad','loopSave','moodboardAdd','loopAddMB','maskLoad','maskAsk','askZoom'].includes(it.type)) {
       s = `{"${it.type}": ${JSON.stringify(it.value)}}`;
+    } else if (it.type === 'fileLoad') {
+      // Inline the loaded file content, stripping outer brackets and {"end": true}
+      const content = fileContents?.[idx] || '';
+      if (content) {
+        let inner = content.trim();
+        // Strip outer [ ] brackets
+        if (inner.startsWith('[')) inner = inner.substring(1);
+        if (inner.endsWith(']')) inner = inner.substring(0, inner.length - 1);
+        // Split lines, filter end markers and empties, rejoin
+        const lines = inner.split('\n')
+          .map(l => l.trim())
+          .filter(l => l.length > 0)
+          .filter(l => !l.match(/^\{?\s*"end"\s*:\s*true\s*\}?,?\s*$/));
+        lines.forEach(line => {
+          // Remove trailing commas at end of line
+          let cleaned = line.replace(/,\s*$/, '');
+          if (cleaned) instructionArray.push(cleaned);
+        });
+      }
+      return; // Skip the normal push
     } else {
       s = `{"${it.type}": true}`;
     }

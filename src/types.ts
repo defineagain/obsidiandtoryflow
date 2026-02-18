@@ -10,7 +10,8 @@ export type StoryflowItemType =
   | 'inpaintTools'
   | 'depthExtract' | 'depthCanvas' | 'depthToCanvas'
   | 'xlMagic'
-  | 'poseJSON' | 'fileLoad'
+  | 'poseJSON' | 'poseClear' | 'fileLoad'
+  | 'moodboardLoad'
   | 'loop' | 'loopLoad' | 'loopSave' | 'loopEnd';
 
 export interface StoryflowItem {
@@ -71,14 +72,14 @@ export const TYPE_LABELS: Record<string, string> = {
   canvasClear: 'clear canvas', canvasSave: 'save canvas', canvasLoad: 'load canvas',
   moveScale: 'move & scale', adaptSize: 'adapt size to fit image', crop: 'crop',
   moodboardClear: 'clear moodboard', moodboardAdd: 'add to moodboard',
-  moodboardCanvas: 'canvas to moodboard', moodboardRemove: 'remove moodboard',
+  moodboardCanvas: 'canvas to moodboard', moodboardLoad: 'add to moodboard', moodboardRemove: 'remove moodboard',
   moodboardWeights: 'set moodboard weights', loopAddMB: 'Add⒤ to moodboard',
   maskClear: 'clear mask', maskLoad: 'load mask', maskGet: 'get mask',
   maskBkgd: 'mask background', maskFG: 'mask foreground', maskBody: 'mask body',
   maskAsk: 'ask mask', inpaintTools: 'in-paint tools',
   depthExtract: 'extract depthmap', depthCanvas: 'canvas to depth layer',
   depthToCanvas: 'depth layer to canvas', xlMagic: 'XL magic✨',
-  poseJSON: 'JSON pose', fileLoad: 'add pipeline',
+  poseJSON: 'JSON pose', poseClear: 'clear pose', fileLoad: 'add pipeline',
   loop: 'loop', loopLoad: 'load image⒤ from', loopSave: 'save image⒤', loopEnd: 'endLoop',
 };
 
@@ -92,7 +93,7 @@ export const BUTTON_STYLES: Partial<Record<StoryflowItemType, string>> = {
   canvasClear: 'storyflow-btn-canvas', canvasSave: 'storyflow-btn-canvas',
   canvasLoad: 'storyflow-btn-canvas',
   moodboardClear: 'storyflow-btn-moodboard', moodboardAdd: 'storyflow-btn-moodboard',
-  moodboardCanvas: 'storyflow-btn-moodboard', moodboardRemove: 'storyflow-btn-moodboard',
+  moodboardCanvas: 'storyflow-btn-moodboard', moodboardLoad: 'storyflow-btn-moodboard', moodboardRemove: 'storyflow-btn-moodboard',
   moodboardWeights: 'storyflow-btn-moodboard', loopAddMB: 'storyflow-btn-loop',
   maskClear: 'storyflow-btn', maskLoad: 'storyflow-btn',
   maskGet: 'storyflow-btn-mask', maskBkgd: 'storyflow-btn-mask',
@@ -101,7 +102,7 @@ export const BUTTON_STYLES: Partial<Record<StoryflowItemType, string>> = {
   depthExtract: 'storyflow-btn-depth', depthCanvas: 'storyflow-btn-depth',
   depthToCanvas: 'storyflow-btn-depth',
   inpaintTools: 'storyflow-btn-mask', xlMagic: 'storyflow-btn-xlMagic',
-  negPrompt: 'storyflow-btn', poseJSON: 'storyflow-btn',
+  negPrompt: 'storyflow-btn', poseJSON: 'storyflow-btn', poseClear: 'storyflow-btn',
   fileLoad: 'storyflow-btn', loop: 'storyflow-btn-loop',
   loopSave: 'storyflow-btn-loop', loopLoad: 'storyflow-btn-loop',
   loopEnd: 'storyflow-btn-loop',
@@ -122,8 +123,8 @@ export const BUTTON_LABELS: Partial<Record<StoryflowItemType, string>> = {
   depthExtract: '+ Extract Depth', depthCanvas: '+ Canvas to Depth',
   depthToCanvas: '+ Depth to Canvas', inpaintTools: '+ Inpaint Tools',
   xlMagic: '+ XL Magic✨',
-  negPrompt: '+ Neg Prompt', poseJSON: '+ JSON Pose', fileLoad: '+ Pipeline',
-  loop: '+ Loop', loopSave: '+ Save ⒤', loopLoad: '+ Load ⒤', loopEnd: '+ EndLoop',
+  negPrompt: '+ Neg Prompt', poseJSON: '+ JSON Pose', poseClear: '+ Clear Pose', fileLoad: '+ Pipeline',
+  moodboardLoad: '+ MB Load', loop: '+ Loop', loopSave: '+ Save ⒤', loopLoad: '+ Load ⒤', loopEnd: '+ EndLoop',
 };
 
 /** Groups of add-item buttons for the instruction bar */
