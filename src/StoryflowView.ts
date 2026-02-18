@@ -1,4 +1,5 @@
-import { ItemView, WorkspaceLeaf, Notice } from 'obsidian';
+import { ItemView, WorkspaceLeaf, Notice, TFile } from 'obsidian';
+import { VaultFileSuggestModal, STORYFLOW_FOLDERS, writeVaultFile, ensureFolder } from './vaultUtils';
 import type StoryflowPlugin from '../main';
 import {
   StoryflowItem, StoryflowItemType, StoryflowProject,
@@ -352,23 +353,16 @@ export class StoryflowView extends ItemView {
       el.style.flexGrow = '1';
       el.createEl('span', { text: 'Include instructions from: ' });
       const displaySpan = el.createEl('span', { text: String(itemObj.value) || 'Click to select .txt file', cls: 'storyflow-file-link' });
-      const fileInput = el.createEl('input', { type: 'file', attr: { accept: '.txt' } });
-      fileInput.style.display = 'none';
       container.dataset.fileContent = '';
-      fileInput.addEventListener('change', (event: Event) => {
-        const file = (event.target as HTMLInputElement).files?.[0];
-        if (file) {
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            container.dataset.fileContent = String(e.target?.result || '');
-            displaySpan.textContent = file.name;
-            container.dataset.value = file.name;
-            this.updatePreview();
-          };
-          reader.readAsText(file);
-        }
+      displaySpan.addEventListener('click', () => {
+        new VaultFileSuggestModal(this.app, ['txt'], async (file: TFile) => {
+          const content = await this.app.vault.read(file);
+          container.dataset.fileContent = content;
+          displaySpan.textContent = file.path;
+          container.dataset.value = file.path;
+          this.updatePreview();
+        }).open();
       });
-      displaySpan.addEventListener('click', () => fileInput.click());
       container.dataset.valueType = 'fileContent';
     } else {
       // Boolean types: canvasClear, removeBkgd, crop, faceZoom, maskGet, maskClear, maskBkgd, maskFG, etc.
@@ -606,69 +600,51 @@ export class StoryflowView extends ItemView {
     };
 
     const jsonStr = JSON.stringify(data, null, 2);
-    const fileName = `${projectName}.json`;
-    try {
-      await this.app.vault.create(fileName, jsonStr);
-      new Notice(`Project saved as ${fileName}`);
-    } catch {
-      // File may already exist, try to modify
-      const existing = this.app.vault.getAbstractFileByPath(fileName);
-      if (existing) {
-        await this.app.vault.modify(existing as any, jsonStr);
-        new Notice(`Project updated: ${fileName}`);
-      }
-    }
+    const filePath = `${STORYFLOW_FOLDERS.projects}/${projectName}.json`;
+    await writeVaultFile(this.app, filePath, jsonStr);
   }
 
   loadProject(): void {
-    const input = createEl('input', { type: 'file', attr: { accept: '.json' } });
-    input.addEventListener('change', (e: Event) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (evt) => {
-        try {
-          const data = JSON.parse(String(evt.target?.result)) as StoryflowProject;
-          this.projectNameInput.value = data.projectName || '';
-          this.triggerListEl.empty();
-          this.configListEl.empty();
-          this.poseListEl.empty();
-          this.wildcardListEl.empty();
-          this.promptListEl.empty();
-          this.promptTriggers = {};
-          this.configShortcuts = {};
-          this.poseJSONShortcuts = {};
-          this.wildcardShortcuts = {};
+    new VaultFileSuggestModal(this.app, ['json'], async (file: TFile) => {
+      try {
+        const content = await this.app.vault.read(file);
+        const data = JSON.parse(content) as StoryflowProject;
+        this.projectNameInput.value = data.projectName || '';
+        this.triggerListEl.empty();
+        this.configListEl.empty();
+        this.poseListEl.empty();
+        this.wildcardListEl.empty();
+        this.promptListEl.empty();
+        this.promptTriggers = {};
+        this.configShortcuts = {};
+        this.poseJSONShortcuts = {};
+        this.wildcardShortcuts = {};
 
-          if (data.promptTriggers) Object.entries(data.promptTriggers).forEach(([k, v]) => this.addTrigger(k, v));
-          if (data.configShortcuts) Object.entries(data.configShortcuts).forEach(([k, v]) => this.addConfigShortcut(k, v));
-          if (data.poseJSONShortcuts) Object.entries(data.poseJSONShortcuts).forEach(([k, v]) => this.addPose(k, v));
-          if (data.wildcardShortcuts) Object.entries(data.wildcardShortcuts).forEach(([k, v]) => this.addWildcard(k, v));
-          if (data.items) data.items.forEach(it => this.addItem(it.type, it.value, true));
-          this.updatePreview();
-          new Notice('Project loaded successfully');
-        } catch (err) {
-          new Notice('Failed to load project file');
-        }
-      };
-      reader.readAsText(file);
-    });
-    input.click();
+        if (data.promptTriggers) Object.entries(data.promptTriggers).forEach(([k, v]) => this.addTrigger(k, v));
+        if (data.configShortcuts) Object.entries(data.configShortcuts).forEach(([k, v]) => this.addConfigShortcut(k, v));
+        if (data.poseJSONShortcuts) Object.entries(data.poseJSONShortcuts).forEach(([k, v]) => this.addPose(k, v));
+        if (data.wildcardShortcuts) Object.entries(data.wildcardShortcuts).forEach(([k, v]) => this.addWildcard(k, v));
+        if (data.items) data.items.forEach(it => this.addItem(it.type, it.value, true));
+        this.updatePreview();
+        new Notice(`Project loaded: ${file.path}`);
+      } catch (err) {
+        new Notice('Failed to load project file');
+      }
+    }).open();
   }
 
   // ═══════════════════════════════════════
   // EXPORT
   // ═══════════════════════════════════════
-  exportPipeline(): void {
+  async exportPipeline(): Promise<void> {
     this.saveAllShortcuts();
     const output = generateInstructionString(
       this.readItemsFromDOM(), this.promptTriggers, this.configShortcuts,
       this.poseJSONShortcuts, this.wildcardShortcuts
     );
-    const blob = new Blob([output], { type: 'text/plain' });
-    const a = createEl('a', { href: URL.createObjectURL(blob), attr: { download: (this.projectNameInput.value || 'project') + '.txt' } });
-    a.click();
-    new Notice('Pipeline exported');
+    const name = this.projectNameInput.value || 'project';
+    const filePath = `${STORYFLOW_FOLDERS.exports}/${name}_pipeline.txt`;
+    await writeVaultFile(this.app, filePath, output);
   }
 
   exportClipboard(): void {
@@ -681,7 +657,7 @@ export class StoryflowView extends ItemView {
     new Notice('Copied to clipboard');
   }
 
-  exportWildcardScript(): void {
+  async exportWildcardScript(): Promise<void> {
     this.saveAllShortcuts();
     let output = '';
 
@@ -723,13 +699,12 @@ export class StoryflowView extends ItemView {
     });
     if (prompts.length > 0) output += `PROMPT: [ ${prompts.join(' | ')} ]`;
 
-    const blob = new Blob([output], { type: 'text/plain' });
-    const a = createEl('a', { href: URL.createObjectURL(blob), attr: { download: (this.projectNameInput.value || 'Project') + '_wildcard.txt' } });
-    a.click();
-    new Notice('Wildcard script exported');
+    const name = this.projectNameInput.value || 'Project';
+    const filePath = `${STORYFLOW_FOLDERS.exports}/${name}_wildcard.txt`;
+    await writeVaultFile(this.app, filePath, output);
   }
 
-  exportConfigPoseScript(): void {
+  async exportConfigPoseScript(): Promise<void> {
     this.saveConfigShortcuts();
     this.savePoseJSONShortcuts();
     let output = '';
@@ -746,98 +721,81 @@ export class StoryflowView extends ItemView {
         ? `${defKey} := ${content}\n\n` : `${defKey} := { ${content} }\n\n`;
     }
     if (!output.trim()) { new Notice('No configs or poses to export'); return; }
-    const blob = new Blob([output], { type: 'text/plain' });
-    const a = createEl('a', { href: URL.createObjectURL(blob), attr: { download: 'config_poses.txt' } });
-    a.click();
-    new Notice('Configs/poses exported');
+    const name = this.projectNameInput.value || 'config_poses';
+    const filePath = `${STORYFLOW_FOLDERS.configs}/${name}_configs.txt`;
+    await writeVaultFile(this.app, filePath, output);
   }
 
   // ═══════════════════════════════════════
   // IMPORT
   // ═══════════════════════════════════════
   importConfigPoseScript(): void {
-    const input = createEl('input', { type: 'file', attr: { accept: '.txt' } });
-    input.addEventListener('change', (e: Event) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (evt) => {
-        const text = String(evt.target?.result);
-        const defStartRegex = /#(\w+)\s*:=\s*\{/g;
-        let match: RegExpExecArray | null;
-        let count = 0;
-        while ((match = defStartRegex.exec(text)) !== null) {
-          const name = match[1];
-          const braceStart = match.index + match[0].length - 1;
-          const extracted = this.extractBalancedBraces(text, braceStart);
-          if (extracted) {
-            if (extracted.content.includes('"points"')) this.addPose(`#${name}`, extracted.content);
-            else this.addConfigShortcut(`#${name}`, extracted.content);
-            count++;
-            defStartRegex.lastIndex = extracted.end + 1;
-          }
+    new VaultFileSuggestModal(this.app, ['txt'], async (file: TFile) => {
+      const text = await this.app.vault.read(file);
+      const defStartRegex = /#(\w+)\s*:=\s*\{/g;
+      let match: RegExpExecArray | null;
+      let count = 0;
+      while ((match = defStartRegex.exec(text)) !== null) {
+        const name = match[1];
+        const braceStart = match.index + match[0].length - 1;
+        const extracted = this.extractBalancedBraces(text, braceStart);
+        if (extracted) {
+          if (extracted.content.includes('"points"')) this.addPose(`#${name}`, extracted.content);
+          else this.addConfigShortcut(`#${name}`, extracted.content);
+          count++;
+          defStartRegex.lastIndex = extracted.end + 1;
         }
-        new Notice(count > 0 ? `Imported ${count} configs/poses` : 'No configs/poses found');
-      };
-      reader.readAsText(file);
-    });
-    input.click();
+      }
+      new Notice(count > 0 ? `Imported ${count} configs/poses from ${file.name}` : 'No configs/poses found');
+    }).open();
   }
 
   importWildcardScript(): void {
-    const input = createEl('input', { type: 'file', attr: { accept: '.txt' } });
-    input.addEventListener('change', (e: Event) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (evt) => {
-        try {
-          const text = String(evt.target?.result);
-          this.newProject();
+    new VaultFileSuggestModal(this.app, ['txt'], async (file: TFile) => {
+      try {
+        const text = await this.app.vault.read(file);
+        this.newProject();
 
-          const defRegex = /([@$#])(\w+)\s*:=\s*\{([\s\S]*?)\}/g;
-          let match: RegExpExecArray | null;
-          const definitions: Record<string, string> = {};
-          while ((match = defRegex.exec(text)) !== null) {
-            const prefix = match[1];
-            const key = match[2].trim();
-            const value = match[3].trim();
-            if (prefix === '#') {
-              if (value.includes('"points"')) this.addPose(`#${key}`, value);
-              else this.addConfigShortcut(`#${key}`, value);
-            } else {
-              definitions[key] = value;
-            }
+        const defRegex = /([@$#])(\w+)\s*:=\s*\{([\s\S]*?)\}/g;
+        let match: RegExpExecArray | null;
+        const definitions: Record<string, string> = {};
+        while ((match = defRegex.exec(text)) !== null) {
+          const prefix = match[1];
+          const key = match[2].trim();
+          const value = match[3].trim();
+          if (prefix === '#') {
+            if (value.includes('"points"')) this.addPose(`#${key}`, value);
+            else this.addConfigShortcut(`#${key}`, value);
+          } else {
+            definitions[key] = value;
           }
-
-          const promptRegex = /PROMPT:\s*\[([\s\S]*?)\]/;
-          const promptMatch = promptRegex.exec(text);
-          if (promptMatch) {
-            let finalPrompt = promptMatch[1].trim();
-            Object.keys(definitions).forEach(key => {
-              const val = definitions[key];
-              if (val.includes('|')) {
-                this.addWildcard(`$${key}`, val);
-                finalPrompt = finalPrompt.replace(new RegExp(`@${key}\\b`, 'g'), `$${key}`);
-              } else {
-                this.addTrigger(`@${key}`, val);
-                finalPrompt = finalPrompt.replace(new RegExp(`\\$${key}\\b`, 'g'), `@${key}`);
-              }
-            });
-            finalPrompt.split('|').forEach(part => {
-              const trimmed = part.trim();
-              if (trimmed) this.addItem('prompt', trimmed, true);
-            });
-          }
-          this.updatePreview();
-          new Notice('Wildcard script imported');
-        } catch {
-          new Notice('Error parsing wildcard script');
         }
-      };
-      reader.readAsText(file);
-    });
-    input.click();
+
+        const promptRegex = /PROMPT:\s*\[([\s\S]*?)\]/;
+        const promptMatch = promptRegex.exec(text);
+        if (promptMatch) {
+          let finalPrompt = promptMatch[1].trim();
+          Object.keys(definitions).forEach(key => {
+            const val = definitions[key];
+            if (val.includes('|')) {
+              this.addWildcard(`$${key}`, val);
+              finalPrompt = finalPrompt.replace(new RegExp(`@${key}\\b`, 'g'), `$${key}`);
+            } else {
+              this.addTrigger(`@${key}`, val);
+              finalPrompt = finalPrompt.replace(new RegExp(`\\$${key}\\b`, 'g'), `@${key}`);
+            }
+          });
+          finalPrompt.split('|').forEach(part => {
+            const trimmed = part.trim();
+            if (trimmed) this.addItem('prompt', trimmed, true);
+          });
+        }
+        this.updatePreview();
+        new Notice(`Wildcard script imported from ${file.name}`);
+      } catch {
+        new Notice('Error parsing wildcard script');
+      }
+    }).open();
   }
 
   // ═══════════════════════════════════════
