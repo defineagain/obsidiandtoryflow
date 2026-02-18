@@ -1,0 +1,74 @@
+{
+  "name": "@mseep/obsidian-mcp-server",
+  "version": "1.5.8",
+  "description": "Model Context Protocol (MCP) server designed for LLMs to interact with Obsidian vaults. Provides secure, token-aware tools for seamless knowledge base management through a standardized interface.",
+  "main": "dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "bin": {
+    "obsidian-mcp-server": "dist/index.js"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/cyanheads/obsidian-mcp-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/cyanheads/obsidian-mcp-server/issues"
+  },
+  "homepage": "https://github.com/cyanheads/obsidian-mcp-server#readme",
+  "scripts": {
+    "build": "tsc",
+    "postbuild": "node -e \"if (process.platform !== 'win32') require('fs').chmodSync('dist/index.js', '755')\"",
+    "start": "node dist/index.js",
+    "start:stdio": "LOG_LEVEL=debug MCP_TRANSPORT_TYPE=stdio node dist/index.js",
+    "start:http": "LOG_LEVEL=debug MCP_TRANSPORT_TYPE=http node dist/index.js",
+    "dev": "tsc -w",
+    "clean": "npx ts-node scripts/clean.ts",
+    "rebuild": "npm run clean && npm run build",
+    "tree": "npx ts-node --esm scripts/tree.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.10.2",
+    "@types/node": "^22.15.3",
+    "@typescript-eslint/eslint-plugin": "^8.31.1",
+    "@typescript-eslint/parser": "^8.31.1",
+    "axios": "^1.9.0",
+    "chrono-node": "^2.8.0",
+    "dotenv": "^16.5.0",
+    "eslint": "^9.25.1",
+    "eslint-config-prettier": "^10.1.2",
+    "eslint-plugin-prettier": "^5.2.6",
+    "nanoid": "^5.1.5",
+    "p-limit": "^6.2.0",
+    "prettier": "^3.5.3",
+    "tiktoken": "^1.0.21",
+    "typescript": "^5.8.3",
+    "winston": "^3.17.0",
+    "yaml": "^2.7.1",
+    "zod": "^3.24.3"
+  },
+  "keywords": [
+    "mcp",
+    "obsidian",
+    "llm",
+    "llm-agent",
+    "ai",
+    "claude",
+    "model-context-protocol",
+    "mcp-server",
+    "typescript",
+    "template",
+    "AI-integration",
+    "server",
+    "knowledge-base",
+    "mseep"
+  ],
+  "author": "Casey Hand @cyanheads",
+  "license": "Apache-2.0",
+  "publisher": "mseep"
+}

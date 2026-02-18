@@ -1,5 +1,8 @@
 import { ItemView, WorkspaceLeaf, Notice, TFile } from 'obsidian';
-import { VaultFileSuggestModal, STORYFLOW_FOLDERS, writeVaultFile, ensureFolder } from './vaultUtils';
+import {
+  VaultFileSuggestModal, STORYFLOW_FOLDERS, writeVaultFile,
+  wrapAsMarkdown, parseStoryflowMarkdown, downloadToDisk, loadFromDisk,
+} from './vaultUtils';
 import type StoryflowPlugin from '../main';
 import {
   StoryflowItem, StoryflowItemType, StoryflowProject,
@@ -138,9 +141,9 @@ export class StoryflowView extends ItemView {
         addBtn.addEventListener('click', () => this.addConfigShortcut());
         const ioRow = footer.createDiv({ cls: 'storyflow-io-row' });
         const loadBtn = ioRow.createEl('button', { text: 'Load configs/poses', cls: 'storyflow-btn-dark' });
-        loadBtn.addEventListener('click', () => this.importConfigPoseScript());
+        loadBtn.addEventListener('click', () => this.importConfigPoseVault());
         const saveBtn = ioRow.createEl('button', { text: 'Save configs/poses', cls: 'storyflow-btn-dark' });
-        saveBtn.addEventListener('click', () => this.exportConfigPoseScript());
+        saveBtn.addEventListener('click', () => this.exportConfigPoseVault());
         footer.createEl('p', { text: 'User-defined shortcuts used by the config items only', cls: 'storyflow-small-muted' });
       } else if (tab.id === 'tab-wildcards') {
         this.wildcardListEl = listContainer;
@@ -414,20 +417,34 @@ export class StoryflowView extends ItemView {
     this.projectNameInput = nameRow.createEl('input', { type: 'text', placeholder: 'Enter project name' }) as HTMLInputElement;
     this.projectNameInput.addEventListener('input', () => this.updatePreview());
 
-    const btnRow = section.createDiv({ cls: 'storyflow-button-row' });
-    const btns: Array<{ text: string; fn: () => void }> = [
-      { text: '🆕 New project', fn: () => this.newProject() },
-      { text: '💾 Save project', fn: () => this.saveProject() },
-      { text: '📂 Load project', fn: () => this.loadProject() },
-      { text: '⬇️ Export to pipeline', fn: () => this.exportPipeline() },
-      { text: '📂 Import wildcard script', fn: () => this.importWildcardScript() },
-      { text: '⬇️ Export wildcard script', fn: () => this.exportWildcardScript() },
-      { text: '📋 Export to clipboard', fn: () => this.exportClipboard() },
+    // New project
+    const topRow = section.createDiv({ cls: 'storyflow-button-row' });
+    const newBtn = topRow.createEl('button', { text: '🆕 New project', cls: 'storyflow-btn-project' });
+    newBtn.addEventListener('click', () => this.newProject());
+
+    // Build grouped buttons: each group has a vault + disk action
+    const groups: Array<{ label: string; vaultText: string; vaultFn: () => void; diskText: string; diskFn: () => void }> = [
+      { label: 'Save', vaultText: '💾 Save → Vault', vaultFn: () => this.saveProjectVault(), diskText: '💾 Save → Disk', diskFn: () => this.saveProjectDisk() },
+      { label: 'Load', vaultText: '📂 Load ← Vault', vaultFn: () => this.loadProjectVault(), diskText: '📂 Load ← Disk', diskFn: () => this.loadProjectDisk() },
+      { label: 'Pipeline', vaultText: '⬇️ Pipeline → Vault', vaultFn: () => this.exportPipelineVault(), diskText: '⬇️ Pipeline → Disk', diskFn: () => this.exportPipelineDisk() },
+      { label: 'Wildcard Export', vaultText: '⬇️ Wildcard → Vault', vaultFn: () => this.exportWildcardVault(), diskText: '⬇️ Wildcard → Disk', diskFn: () => this.exportWildcardDisk() },
+      { label: 'Wildcard Import', vaultText: '📂 Wildcard ← Vault', vaultFn: () => this.importWildcardVault(), diskText: '📂 Wildcard ← Disk', diskFn: () => this.importWildcardDisk() },
+      { label: 'Configs', vaultText: '⬇️ Configs → Vault', vaultFn: () => this.exportConfigPoseVault(), diskText: '⬇️ Configs → Disk', diskFn: () => this.exportConfigPoseDisk() },
+      { label: 'Configs Import', vaultText: '📂 Configs ← Vault', vaultFn: () => this.importConfigPoseVault(), diskText: '📂 Configs ← Disk', diskFn: () => this.importConfigPoseDisk() },
     ];
-    btns.forEach(b => {
-      const btn = btnRow.createEl('button', { text: b.text, cls: 'storyflow-btn-project' });
-      btn.addEventListener('click', b.fn);
+
+    groups.forEach(g => {
+      const row = section.createDiv({ cls: 'storyflow-button-pair' });
+      const vBtn = row.createEl('button', { text: g.vaultText, cls: 'storyflow-btn-project storyflow-btn-vault' });
+      vBtn.addEventListener('click', g.vaultFn);
+      const dBtn = row.createEl('button', { text: g.diskText, cls: 'storyflow-btn-project storyflow-btn-disk' });
+      dBtn.addEventListener('click', g.diskFn);
     });
+
+    // Clipboard (standalone)
+    const clipRow = section.createDiv({ cls: 'storyflow-button-row' });
+    const clipBtn = clipRow.createEl('button', { text: '📋 Export to clipboard', cls: 'storyflow-btn-project' });
+    clipBtn.addEventListener('click', () => this.exportClipboard());
   }
 
   // ═══════════════════════════════════════
@@ -583,97 +600,62 @@ export class StoryflowView extends ItemView {
     this.updatePreview();
   }
 
-  async saveProject(): Promise<void> {
-    this.savePromptTriggers();
-    this.saveConfigShortcuts();
-    this.savePoseJSONShortcuts();
-    this.saveWildcardShortcuts();
-
-    const projectName = this.projectNameInput.value || 'StoryFlowProject';
+  // ═══════════════════════════════════════
+  // SHARED DATA BUILDERS
+  // ═══════════════════════════════════════
+  private getProjectData(): { name: string; data: StoryflowProject; jsonStr: string } {
+    this.saveAllShortcuts();
+    const name = this.projectNameInput.value || 'StoryFlowProject';
     const data: StoryflowProject = {
-      projectName,
+      projectName: name,
       promptTriggers: this.promptTriggers,
       configShortcuts: this.configShortcuts,
       poseJSONShortcuts: this.poseJSONShortcuts,
       wildcardShortcuts: this.wildcardShortcuts,
       items: this.readItemsFromDOM(),
     };
-
-    const jsonStr = JSON.stringify(data, null, 2);
-    const filePath = `${STORYFLOW_FOLDERS.projects}/${projectName}.json`;
-    await writeVaultFile(this.app, filePath, jsonStr);
+    return { name, data, jsonStr: JSON.stringify(data, null, 2) };
   }
 
-  loadProject(): void {
-    new VaultFileSuggestModal(this.app, ['json'], async (file: TFile) => {
-      try {
-        const content = await this.app.vault.read(file);
-        const data = JSON.parse(content) as StoryflowProject;
-        this.projectNameInput.value = data.projectName || '';
-        this.triggerListEl.empty();
-        this.configListEl.empty();
-        this.poseListEl.empty();
-        this.wildcardListEl.empty();
-        this.promptListEl.empty();
-        this.promptTriggers = {};
-        this.configShortcuts = {};
-        this.poseJSONShortcuts = {};
-        this.wildcardShortcuts = {};
-
-        if (data.promptTriggers) Object.entries(data.promptTriggers).forEach(([k, v]) => this.addTrigger(k, v));
-        if (data.configShortcuts) Object.entries(data.configShortcuts).forEach(([k, v]) => this.addConfigShortcut(k, v));
-        if (data.poseJSONShortcuts) Object.entries(data.poseJSONShortcuts).forEach(([k, v]) => this.addPose(k, v));
-        if (data.wildcardShortcuts) Object.entries(data.wildcardShortcuts).forEach(([k, v]) => this.addWildcard(k, v));
-        if (data.items) data.items.forEach(it => this.addItem(it.type, it.value, true));
-        this.updatePreview();
-        new Notice(`Project loaded: ${file.path}`);
-      } catch (err) {
-        new Notice('Failed to load project file');
-      }
-    }).open();
+  private applyProjectData(data: StoryflowProject): void {
+    this.projectNameInput.value = data.projectName || '';
+    this.triggerListEl.empty();
+    this.configListEl.empty();
+    this.poseListEl.empty();
+    this.wildcardListEl.empty();
+    this.promptListEl.empty();
+    this.promptTriggers = {};
+    this.configShortcuts = {};
+    this.poseJSONShortcuts = {};
+    this.wildcardShortcuts = {};
+    if (data.promptTriggers) Object.entries(data.promptTriggers).forEach(([k, v]) => this.addTrigger(k, v));
+    if (data.configShortcuts) Object.entries(data.configShortcuts).forEach(([k, v]) => this.addConfigShortcut(k, v));
+    if (data.poseJSONShortcuts) Object.entries(data.poseJSONShortcuts).forEach(([k, v]) => this.addPose(k, v));
+    if (data.wildcardShortcuts) Object.entries(data.wildcardShortcuts).forEach(([k, v]) => this.addWildcard(k, v));
+    if (data.items) data.items.forEach(it => this.addItem(it.type, it.value, true));
+    this.updatePreview();
   }
 
-  // ═══════════════════════════════════════
-  // EXPORT
-  // ═══════════════════════════════════════
-  async exportPipeline(): Promise<void> {
+  private getPipelineOutput(): string {
     this.saveAllShortcuts();
-    const output = generateInstructionString(
+    return generateInstructionString(
       this.readItemsFromDOM(), this.promptTriggers, this.configShortcuts,
       this.poseJSONShortcuts, this.wildcardShortcuts
     );
-    const name = this.projectNameInput.value || 'project';
-    const filePath = `${STORYFLOW_FOLDERS.exports}/${name}_pipeline.txt`;
-    await writeVaultFile(this.app, filePath, output);
   }
 
-  exportClipboard(): void {
-    this.saveAllShortcuts();
-    const output = generateInstructionString(
-      this.readItemsFromDOM(), this.promptTriggers, this.configShortcuts,
-      this.poseJSONShortcuts, this.wildcardShortcuts
-    );
-    navigator.clipboard.writeText(output);
-    new Notice('Copied to clipboard');
-  }
-
-  async exportWildcardScript(): Promise<void> {
+  private buildWildcardOutput(): string {
     this.saveAllShortcuts();
     let output = '';
-
     for (const [key, val] of Object.entries(this.configShortcuts)) {
       const defKey = key.startsWith('#') ? key : '#' + key;
-      const content = val.trim();
-      output += (content.startsWith('{') && content.endsWith('}'))
-        ? `${defKey} := ${content}\n\n`
-        : `${defKey} := { ${content} }\n\n`;
+      const c = val.trim();
+      output += (c.startsWith('{') && c.endsWith('}')) ? `${defKey} := ${c}\n\n` : `${defKey} := { ${c} }\n\n`;
     }
     for (const [key, val] of Object.entries(this.poseJSONShortcuts)) {
       const defKey = key.startsWith('#') ? key : '#' + key;
-      const content = val.trim();
-      output += (content.startsWith('{') && content.endsWith('}'))
-        ? `${defKey} := ${content}\n\n`
-        : `${defKey} := { ${content} }\n\n`;
+      const c = val.trim();
+      output += (c.startsWith('{') && c.endsWith('}')) ? `${defKey} := ${c}\n\n` : `${defKey} := { ${c} }\n\n`;
     }
     for (const [key, val] of Object.entries(this.promptTriggers)) {
       const defKey = key.startsWith('@') ? key : '@' + key;
@@ -685,7 +667,6 @@ export class StoryflowView extends ItemView {
       else if (!key.startsWith('@')) defKey = '@' + key;
       output += `${defKey} := { ${val} }\n\n`;
     }
-
     const items = this.readItemsFromDOM();
     const prompts = items.filter(it => it.type === 'prompt').map(it => {
       let content = String(it.value);
@@ -698,104 +679,245 @@ export class StoryflowView extends ItemView {
       return content;
     });
     if (prompts.length > 0) output += `PROMPT: [ ${prompts.join(' | ')} ]`;
-
-    const name = this.projectNameInput.value || 'Project';
-    const filePath = `${STORYFLOW_FOLDERS.exports}/${name}_wildcard.txt`;
-    await writeVaultFile(this.app, filePath, output);
+    return output;
   }
 
-  async exportConfigPoseScript(): Promise<void> {
+  private buildConfigPoseOutput(): string {
     this.saveConfigShortcuts();
     this.savePoseJSONShortcuts();
     let output = '';
     for (const [key, val] of Object.entries(this.configShortcuts)) {
       const defKey = key.startsWith('#') ? key : '#' + key;
-      const content = val.trim();
-      output += (content.startsWith('{') && content.endsWith('}'))
-        ? `${defKey} := ${content}\n\n` : `${defKey} := { ${content} }\n\n`;
+      const c = val.trim();
+      output += (c.startsWith('{') && c.endsWith('}')) ? `${defKey} := ${c}\n\n` : `${defKey} := { ${c} }\n\n`;
     }
     for (const [key, val] of Object.entries(this.poseJSONShortcuts)) {
       const defKey = key.startsWith('#') ? key : '#' + key;
-      const content = val.trim();
-      output += (content.startsWith('{') && content.endsWith('}'))
-        ? `${defKey} := ${content}\n\n` : `${defKey} := { ${content} }\n\n`;
+      const c = val.trim();
+      output += (c.startsWith('{') && c.endsWith('}')) ? `${defKey} := ${c}\n\n` : `${defKey} := { ${c} }\n\n`;
     }
-    if (!output.trim()) { new Notice('No configs or poses to export'); return; }
-    const name = this.projectNameInput.value || 'config_poses';
-    const filePath = `${STORYFLOW_FOLDERS.configs}/${name}_configs.txt`;
-    await writeVaultFile(this.app, filePath, output);
+    return output;
   }
 
   // ═══════════════════════════════════════
-  // IMPORT
+  // SAVE PROJECT
   // ═══════════════════════════════════════
-  importConfigPoseScript(): void {
-    new VaultFileSuggestModal(this.app, ['txt'], async (file: TFile) => {
-      const text = await this.app.vault.read(file);
-      const defStartRegex = /#(\w+)\s*:=\s*\{/g;
-      let match: RegExpExecArray | null;
-      let count = 0;
-      while ((match = defStartRegex.exec(text)) !== null) {
-        const name = match[1];
-        const braceStart = match.index + match[0].length - 1;
-        const extracted = this.extractBalancedBraces(text, braceStart);
-        if (extracted) {
-          if (extracted.content.includes('"points"')) this.addPose(`#${name}`, extracted.content);
-          else this.addConfigShortcut(`#${name}`, extracted.content);
-          count++;
-          defStartRegex.lastIndex = extracted.end + 1;
+  async saveProjectVault(): Promise<void> {
+    const { name, jsonStr } = this.getProjectData();
+    const now = new Date().toISOString();
+    const md = wrapAsMarkdown({ storyflow: 'project', name, created: now }, jsonStr, 'json');
+    const filePath = `${STORYFLOW_FOLDERS.projects}/${name}.md`;
+    await writeVaultFile(this.app, filePath, md);
+  }
+
+  saveProjectDisk(): void {
+    const { name, jsonStr } = this.getProjectData();
+    downloadToDisk(`${name}.json`, jsonStr, 'application/json');
+  }
+
+  // ═══════════════════════════════════════
+  // LOAD PROJECT
+  // ═══════════════════════════════════════
+  loadProjectVault(): void {
+    new VaultFileSuggestModal(this.app, ['md', 'json'], async (file: TFile) => {
+      try {
+        const raw = await this.app.vault.read(file);
+        let data: StoryflowProject;
+        if (file.extension === 'md') {
+          const parsed = parseStoryflowMarkdown(raw);
+          if (!parsed) { new Notice('Not a valid Storyflow markdown file'); return; }
+          data = JSON.parse(parsed.content) as StoryflowProject;
+        } else {
+          data = JSON.parse(raw) as StoryflowProject;
         }
+        this.applyProjectData(data);
+        new Notice(`Project loaded: ${file.path}`);
+      } catch {
+        new Notice('Failed to load project file');
       }
+    }).open();
+  }
+
+  loadProjectDisk(): void {
+    loadFromDisk('.json', (_filename, content) => {
+      try {
+        const data = JSON.parse(content) as StoryflowProject;
+        this.applyProjectData(data);
+        new Notice(`Project loaded from disk`);
+      } catch {
+        new Notice('Failed to parse project file');
+      }
+    });
+  }
+
+  // ═══════════════════════════════════════
+  // EXPORT PIPELINE
+  // ═══════════════════════════════════════
+  async exportPipelineVault(): Promise<void> {
+    const output = this.getPipelineOutput();
+    const name = this.projectNameInput.value || 'project';
+    const now = new Date().toISOString();
+    const md = wrapAsMarkdown({ storyflow: 'pipeline', project: name, created: now }, output, 'storyflow-pipeline');
+    await writeVaultFile(this.app, `${STORYFLOW_FOLDERS.exports}/${name}_pipeline.md`, md);
+  }
+
+  exportPipelineDisk(): void {
+    const output = this.getPipelineOutput();
+    const name = this.projectNameInput.value || 'project';
+    downloadToDisk(`${name}_pipeline.txt`, output);
+  }
+
+  // ═══════════════════════════════════════
+  // EXPORT CLIPBOARD
+  // ═══════════════════════════════════════
+  exportClipboard(): void {
+    const output = this.getPipelineOutput();
+    navigator.clipboard.writeText(output);
+    new Notice('Copied to clipboard');
+  }
+
+  // ═══════════════════════════════════════
+  // EXPORT WILDCARD
+  // ═══════════════════════════════════════
+  async exportWildcardVault(): Promise<void> {
+    const output = this.buildWildcardOutput();
+    const name = this.projectNameInput.value || 'Project';
+    const now = new Date().toISOString();
+    const md = wrapAsMarkdown({ storyflow: 'wildcard', project: name, created: now }, output, 'storyflow-wildcard');
+    await writeVaultFile(this.app, `${STORYFLOW_FOLDERS.exports}/${name}_wildcard.md`, md);
+  }
+
+  exportWildcardDisk(): void {
+    const output = this.buildWildcardOutput();
+    const name = this.projectNameInput.value || 'Project';
+    downloadToDisk(`${name}_wildcard.txt`, output);
+  }
+
+  // ═══════════════════════════════════════
+  // EXPORT CONFIG/POSE
+  // ═══════════════════════════════════════
+  async exportConfigPoseVault(): Promise<void> {
+    const output = this.buildConfigPoseOutput();
+    if (!output.trim()) { new Notice('No configs or poses to export'); return; }
+    const name = this.projectNameInput.value || 'config_poses';
+    const now = new Date().toISOString();
+    const md = wrapAsMarkdown({ storyflow: 'config', project: name, created: now }, output, 'storyflow-config');
+    await writeVaultFile(this.app, `${STORYFLOW_FOLDERS.configs}/${name}_configs.md`, md);
+  }
+
+  exportConfigPoseDisk(): void {
+    const output = this.buildConfigPoseOutput();
+    if (!output.trim()) { new Notice('No configs or poses to export'); return; }
+    const name = this.projectNameInput.value || 'config_poses';
+    downloadToDisk(`${name}_configs.txt`, output);
+  }
+
+  // ═══════════════════════════════════════
+  // IMPORT CONFIG/POSE
+  // ═══════════════════════════════════════
+  private parseConfigPoseText(text: string): number {
+    // If it's a markdown file, extract the code block content
+    const parsed = parseStoryflowMarkdown(text);
+    const rawText = parsed ? parsed.content : text;
+
+    const defStartRegex = /#(\w+)\s*:=\s*\{/g;
+    let match: RegExpExecArray | null;
+    let count = 0;
+    while ((match = defStartRegex.exec(rawText)) !== null) {
+      const name = match[1];
+      const braceStart = match.index + match[0].length - 1;
+      const extracted = this.extractBalancedBraces(rawText, braceStart);
+      if (extracted) {
+        if (extracted.content.includes('"points"')) this.addPose(`#${name}`, extracted.content);
+        else this.addConfigShortcut(`#${name}`, extracted.content);
+        count++;
+        defStartRegex.lastIndex = extracted.end + 1;
+      }
+    }
+    return count;
+  }
+
+  importConfigPoseVault(): void {
+    new VaultFileSuggestModal(this.app, ['txt', 'md'], async (file: TFile) => {
+      const text = await this.app.vault.read(file);
+      const count = this.parseConfigPoseText(text);
       new Notice(count > 0 ? `Imported ${count} configs/poses from ${file.name}` : 'No configs/poses found');
     }).open();
   }
 
-  importWildcardScript(): void {
-    new VaultFileSuggestModal(this.app, ['txt'], async (file: TFile) => {
+  importConfigPoseDisk(): void {
+    loadFromDisk('.txt', (filename, content) => {
+      const count = this.parseConfigPoseText(content);
+      new Notice(count > 0 ? `Imported ${count} configs/poses from ${filename}` : 'No configs/poses found');
+    });
+  }
+
+  // ═══════════════════════════════════════
+  // IMPORT WILDCARD
+  // ═══════════════════════════════════════
+  private parseWildcardText(text: string): void {
+    // If it's a markdown file, extract the code block content
+    const parsed = parseStoryflowMarkdown(text);
+    const rawText = parsed ? parsed.content : text;
+
+    this.newProject();
+    const defRegex = /([@$#])(\w+)\s*:=\s*\{([\s\S]*?)\}/g;
+    let match: RegExpExecArray | null;
+    const definitions: Record<string, string> = {};
+    while ((match = defRegex.exec(rawText)) !== null) {
+      const prefix = match[1];
+      const key = match[2].trim();
+      const value = match[3].trim();
+      if (prefix === '#') {
+        if (value.includes('"points"')) this.addPose(`#${key}`, value);
+        else this.addConfigShortcut(`#${key}`, value);
+      } else {
+        definitions[key] = value;
+      }
+    }
+    const promptRegex = /PROMPT:\s*\[([\s\S]*?)\]/;
+    const promptMatch = promptRegex.exec(rawText);
+    if (promptMatch) {
+      let finalPrompt = promptMatch[1].trim();
+      Object.keys(definitions).forEach(key => {
+        const val = definitions[key];
+        if (val.includes('|')) {
+          this.addWildcard(`$${key}`, val);
+          finalPrompt = finalPrompt.replace(new RegExp(`@${key}\\b`, 'g'), `$${key}`);
+        } else {
+          this.addTrigger(`@${key}`, val);
+          finalPrompt = finalPrompt.replace(new RegExp(`\\$${key}\\b`, 'g'), `@${key}`);
+        }
+      });
+      finalPrompt.split('|').forEach(part => {
+        const trimmed = part.trim();
+        if (trimmed) this.addItem('prompt', trimmed, true);
+      });
+    }
+    this.updatePreview();
+  }
+
+  importWildcardVault(): void {
+    new VaultFileSuggestModal(this.app, ['txt', 'md'], async (file: TFile) => {
       try {
         const text = await this.app.vault.read(file);
-        this.newProject();
-
-        const defRegex = /([@$#])(\w+)\s*:=\s*\{([\s\S]*?)\}/g;
-        let match: RegExpExecArray | null;
-        const definitions: Record<string, string> = {};
-        while ((match = defRegex.exec(text)) !== null) {
-          const prefix = match[1];
-          const key = match[2].trim();
-          const value = match[3].trim();
-          if (prefix === '#') {
-            if (value.includes('"points"')) this.addPose(`#${key}`, value);
-            else this.addConfigShortcut(`#${key}`, value);
-          } else {
-            definitions[key] = value;
-          }
-        }
-
-        const promptRegex = /PROMPT:\s*\[([\s\S]*?)\]/;
-        const promptMatch = promptRegex.exec(text);
-        if (promptMatch) {
-          let finalPrompt = promptMatch[1].trim();
-          Object.keys(definitions).forEach(key => {
-            const val = definitions[key];
-            if (val.includes('|')) {
-              this.addWildcard(`$${key}`, val);
-              finalPrompt = finalPrompt.replace(new RegExp(`@${key}\\b`, 'g'), `$${key}`);
-            } else {
-              this.addTrigger(`@${key}`, val);
-              finalPrompt = finalPrompt.replace(new RegExp(`\\$${key}\\b`, 'g'), `@${key}`);
-            }
-          });
-          finalPrompt.split('|').forEach(part => {
-            const trimmed = part.trim();
-            if (trimmed) this.addItem('prompt', trimmed, true);
-          });
-        }
-        this.updatePreview();
+        this.parseWildcardText(text);
         new Notice(`Wildcard script imported from ${file.name}`);
       } catch {
         new Notice('Error parsing wildcard script');
       }
     }).open();
+  }
+
+  importWildcardDisk(): void {
+    loadFromDisk('.txt', (filename, content) => {
+      try {
+        this.parseWildcardText(content);
+        new Notice(`Wildcard script imported from ${filename}`);
+      } catch {
+        new Notice('Error parsing wildcard script');
+      }
+    });
   }
 
   // ═══════════════════════════════════════

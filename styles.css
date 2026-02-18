@@ -472,3 +472,21 @@
   color: var(--text-accent);
   margin-left: 5px;
 }
+
+/* ── Dual button pair (vault + disk) ── */
+.storyflow-button-pair {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+.storyflow-button-pair .storyflow-btn-project {
+  flex: 1;
+  font-size: 12px;
+  padding: 4px 6px;
+}
+.storyflow-btn-vault {
+  border-left: 3px solid var(--interactive-accent) !important;
+}
+.storyflow-btn-disk {
+  border-left: 3px solid var(--text-muted) !important;
+}
